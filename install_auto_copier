@@ -49,8 +49,8 @@ write_launcher() {
 Version=1.0
 Type=Application
 Name=Auto Copier
-GenericName=Password Zip Copier
-Comment=Zip a folder with a reverse-name password and copy it
+GenericName=Password Archive Copier
+Comment=Create a header-encrypted 7z with a reverse-name password and copy it
 Exec=${INSTALL_BIN}
 Icon=${icon}
 Terminal=false
@@ -114,8 +114,8 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f -t "${ICON_DIR}" || true
 fi
 
-if ! command -v zip >/dev/null 2>&1; then
-  echo "မှတ်ချက်: zip မရှိသေးပါ။ App သုံးရန် 'sudo apt install zip' လုပ်ပါ။" >&2
+if ! command -v 7z >/dev/null 2>&1; then
+  echo "မှတ်ချက်: 7z မရှိသေးပါ။ App သုံးရန် 'sudo apt install p7zip-full' လုပ်ပါ။" >&2
 fi
 
 echo "တပ်ဆင်ပြီးပါပြီ။"

@@ -42,19 +42,77 @@ desktop_dir() {
 remove_path() {
   local path="$1"
   if [[ -e "${path}" || -L "${path}" ]]; then
-    rm -f "${path}"
+    if command -v gio >/dev/null 2>&1; then
+      # Drop the trusted flag first so Desktop Icons NG stops treating it as a launcher.
+      gio set -t string "${path}" metadata::trusted false >/dev/null 2>&1 || true
+    fi
+    rm -f -- "${path}"
     echo "ဖျက်ပြီး: ${path}"
   else
     echo "မရှိပါ: ${path}"
   fi
 }
 
+is_auto_copier_launcher() {
+  local path="$1"
+  [[ -f "${path}" ]] || return 1
+  grep -qE '^(Exec=.*auto_copier|Icon=.*auto_copier|Name=Auto Copier)$' "${path}"
+}
+
+remove_desktop_launchers() {
+  local dir="$1"
+  local path
+  [[ -d "${dir}" ]] || return 0
+
+  remove_path "${dir}/${LAUNCHER_NAME}"
+  remove_path "${dir}/auto_copier.desktop"
+  remove_path "${dir}/Auto Copier.desktop"
+
+  shopt -s nullglob
+  for path in "${dir}"/*.desktop "${dir}"/*.DESKTOP; do
+    if is_auto_copier_launcher "${path}"; then
+      remove_path "${path}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+refresh_desktop_icons() {
+  local dir="$1"
+  local stamp pid cmdline
+  [[ -d "${dir}" ]] || return 0
+
+  # DING rate-limits directory events and can keep a deleted launcher on screen.
+  stamp="${dir}/.auto_copier_refresh"
+  touch "${stamp}" 2>/dev/null || true
+  rm -f -- "${stamp}" || true
+
+  if [[ ! -d /proc ]]; then
+    return 0
+  fi
+  for pid in /proc/[0-9]*; do
+    pid="${pid#/proc/}"
+    [[ -r "/proc/${pid}/cmdline" ]] || continue
+    cmdline="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+    if [[ "${cmdline}" == *ding@rastersoft.com/ding.js* ]]; then
+      kill "${pid}" 2>/dev/null || true
+    fi
+  done
+}
+
 require_ubuntu_22
 
 DESKTOP_DIR="$(desktop_dir)"
 remove_path "${INSTALL_BIN}"
-remove_path "${DESKTOP_DIR}/${LAUNCHER_NAME}"
+# Drop the menu entry before the desktop file so nothing can recreate the shortcut from it.
 remove_path "${MENU_DIR}/${LAUNCHER_NAME}"
+remove_desktop_launchers "${DESKTOP_DIR}"
+if [[ "${DESKTOP_DIR}" != "${HOME}/Desktop" ]]; then
+  remove_desktop_launchers "${HOME}/Desktop"
+fi
+if [[ -n "${XDG_DESKTOP_DIR:-}" && "${XDG_DESKTOP_DIR}" != "${DESKTOP_DIR}" ]]; then
+  remove_desktop_launchers "${XDG_DESKTOP_DIR}"
+fi
 remove_path "${DATA_DIR}/icon.png"
 remove_path "${ICON_DIR}/48x48/apps/${APP_ID}.png"
 remove_path "${ICON_DIR}/128x128/apps/${APP_ID}.png"
@@ -72,4 +130,12 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1 && [[ -d "${ICON_DIR}" ]]; t
   gtk-update-icon-cache -f -t "${ICON_DIR}" || true
 fi
 
-echo "ဖယ်ရှားပြီးပါပြီ။ Binary နှင့် icon များကို ဖျက်ပြီးပါပြီ။"
+# Second pass: a file monitor can restore the shortcut before the first delete settles.
+sleep 1
+remove_desktop_launchers "${DESKTOP_DIR}"
+if [[ "${DESKTOP_DIR}" != "${HOME}/Desktop" ]]; then
+  remove_desktop_launchers "${HOME}/Desktop"
+fi
+refresh_desktop_icons "${DESKTOP_DIR}"
+
+echo "ဖယ်ရှားပြီးပါပြီ။ Binary နှင့် Desktop icon များကို ဖျက်ပြီးပါပြီ။"

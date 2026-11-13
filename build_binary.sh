@@ -17,7 +17,7 @@ fi
   --onefile \
   --windowed \
   --name auto_copier \
-  --add-data "assets/icon.png:assets" \
+  --add-data "assets:assets" \
   auto_copier.py
 
 echo "Built: ${ROOT}/dist/auto_copier"
