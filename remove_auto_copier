@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Ubuntu 22.04 only. Removes the installed Auto Copier binary and icons.
+set -euo pipefail
+
+APP_ID="auto_copier"
+LAUNCHER_NAME="auto-copier.desktop"
+INSTALL_BIN="${HOME}/.local/bin/${APP_ID}"
+DATA_DIR="${HOME}/.local/share/${APP_ID}"
+ICON_DIR="${HOME}/.local/share/icons/hicolor"
+MENU_DIR="${HOME}/.local/share/applications"
+
+require_ubuntu_22() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    echo "root အနေနဲ့ မဖယ်ရှားပါနှင့်။ တပ်ဆင်ထားသော user အကောင့်နဲ့ run ပါ။" >&2
+    exit 1
+  fi
+  if [[ ! -r /etc/os-release ]]; then
+    echo "Ubuntu 22.04 မှာသာ ဖယ်ရှားလို့ရသည်။" >&2
+    exit 1
+  fi
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "22.04" ]]; then
+    echo "Ubuntu 22.04 အတွက်သာ ဖြစ်သည်။ လက်ရှိစနစ်: ${PRETTY_NAME:-unknown}" >&2
+    exit 1
+  fi
+}
+
+desktop_dir() {
+  local dir
+  if command -v xdg-user-dir >/dev/null 2>&1; then
+    dir="$(xdg-user-dir DESKTOP)"
+  else
+    dir="${HOME}/Desktop"
+  fi
+  if [[ -z "${dir}" || "${dir}" == "${HOME}" ]]; then
+    dir="${HOME}/Desktop"
+  fi
+  printf '%s\n' "${dir}"
+}
+
+remove_path() {
+  local path="$1"
+  if [[ -e "${path}" || -L "${path}" ]]; then
+    rm -f "${path}"
+    echo "ဖျက်ပြီး: ${path}"
+  else
+    echo "မရှိပါ: ${path}"
+  fi
+}
+
+require_ubuntu_22
+
+DESKTOP_DIR="$(desktop_dir)"
+remove_path "${INSTALL_BIN}"
+remove_path "${DESKTOP_DIR}/${LAUNCHER_NAME}"
+remove_path "${MENU_DIR}/${LAUNCHER_NAME}"
+remove_path "${DATA_DIR}/icon.png"
+remove_path "${ICON_DIR}/48x48/apps/${APP_ID}.png"
+remove_path "${ICON_DIR}/128x128/apps/${APP_ID}.png"
+remove_path "${ICON_DIR}/256x256/apps/${APP_ID}.png"
+remove_path "${ICON_DIR}/512x512/apps/${APP_ID}.png"
+
+if [[ -d "${DATA_DIR}" ]]; then
+  rmdir "${DATA_DIR}" 2>/dev/null || true
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1 && [[ -d "${MENU_DIR}" ]]; then
+  update-desktop-database "${MENU_DIR}" || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [[ -d "${ICON_DIR}" ]]; then
+  gtk-update-icon-cache -f -t "${ICON_DIR}" || true
+fi
+
+echo "ဖယ်ရှားပြီးပါပြီ။ Binary နှင့် icon များကို ဖျက်ပြီးပါပြီ။"

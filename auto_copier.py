@@ -1,17 +1,40 @@
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 import threading
+import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+
+
+def resource_path(relative_path):
+  if getattr(sys, "frozen", False):
+    base = Path(sys._MEIPASS)
+  else:
+    base = Path(__file__).resolve().parent
+  return base / relative_path
+
+
+def apply_window_icon(root):
+  icon_path = resource_path("assets/icon.png")
+  if not icon_path.is_file():
+    return
+  try:
+    icon = tk.PhotoImage(file=str(icon_path))
+  except tk.TclError:
+    return
+  root.iconphoto(True, icon)
+  root._icon_image = icon
 
 
 class AutoPasswordZipCopierApp:
 
   def __init__(self, root):
     self.root = root
-    self.root.title("Auto Reverse-Name Password Zip & Copy App")
-    self.root.geometry("500x400")
+    self.root.title("Auto Copier")
+    self.root.geometry("560x400")
     self.root.resizable(False, False)
 
     self.desktop_path = str(Path.home() / "Desktop")
@@ -19,20 +42,19 @@ class AutoPasswordZipCopierApp:
     # --- Widgets Layout ---
     # 1. Source Folder
     tk.Label(
-        root, text="Source Folder (Desktop):", font=("Arial", 10, "bold")
+        root, text="Source Folder:", font=("Arial", 10, "bold")
     ).pack(anchor="w", padx=20, pady=(15, 5))
     src_frame = tk.Frame(root)
     src_frame.pack(fill="x", padx=20)
 
-    self.src_entry = tk.Entry(src_frame, width=40, font=("Arial", 10))
-    self.src_entry.pack(side="left", padx=(0, 10))
-    self.src_entry.insert(0, self.desktop_path)
     tk.Button(
         src_frame,
-        text="Browse",
+        text="File Explorer",
         command=self.select_source,
         font=("Arial", 9),
-    ).pack(side="left")
+    ).pack(side="right")
+    self.src_entry = tk.Entry(src_frame, font=("Arial", 10))
+    self.src_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
     # 2. Destination Folder
     tk.Label(
@@ -41,14 +63,14 @@ class AutoPasswordZipCopierApp:
     dst_frame = tk.Frame(root)
     dst_frame.pack(fill="x", padx=20)
 
-    self.dst_entry = tk.Entry(dst_frame, width=40, font=("Arial", 10))
-    self.dst_entry.pack(side="left", padx=(0, 10))
     tk.Button(
         dst_frame,
-        text="Browse",
+        text="File Explorer",
         command=self.select_destination,
         font=("Arial", 9),
-    ).pack(side="left")
+    ).pack(side="right")
+    self.dst_entry = tk.Entry(dst_frame, font=("Arial", 10))
+    self.dst_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
     # 3. Version / String input
     tk.Label(
@@ -80,17 +102,25 @@ class AutoPasswordZipCopierApp:
     )
     self.status_label.pack(anchor="w", padx=20, pady=(0, 10))
 
-  def select_source(self):
-    dir_path = filedialog.askdirectory(initialdir=self.desktop_path)
+  def _choose_folder(self, title, entry):
+    initial = entry.get().strip() or self.desktop_path
+    if not os.path.isdir(initial):
+      initial = self.desktop_path
+    dir_path = filedialog.askdirectory(
+        parent=self.root,
+        title=title,
+        initialdir=initial,
+        mustexist=True,
+    )
     if dir_path:
-      self.src_entry.delete(0, tk.END)
-      self.src_entry.insert(0, dir_path)
+      entry.delete(0, tk.END)
+      entry.insert(0, dir_path)
+
+  def select_source(self):
+    self._choose_folder("Select Source Folder", self.src_entry)
 
   def select_destination(self):
-    dir_path = filedialog.askdirectory(initialdir=self.desktop_path)
-    if dir_path:
-      self.dst_entry.delete(0, tk.END)
-      self.dst_entry.insert(0, dir_path)
+    self._choose_folder("Select Destination Folder", self.dst_entry)
 
   def start_process_thread(self):
     if not self.check_zip_installed():
@@ -183,7 +213,19 @@ class AutoPasswordZipCopierApp:
     self.status_label.config(text="Ready", fg="gray")
 
 
+def _log_uncaught(exc_type, exc, tb):
+  if issubclass(exc_type, KeyboardInterrupt):
+    sys.__excepthook__(exc_type, exc, tb)
+    return
+  log_path = Path.home() / ".auto_copier_error.log"
+  with log_path.open("a", encoding="utf-8") as log:
+    log.write("".join(traceback.format_exception(exc_type, exc, tb)))
+    log.write("\n")
+
+
 if __name__ == "__main__":
-  root = tk.Tk()
+  sys.excepthook = _log_uncaught
+  root = tk.Tk(className="autocopier")
+  apply_window_icon(root)
   app = AutoPasswordZipCopierApp(root)
   root.mainloop()

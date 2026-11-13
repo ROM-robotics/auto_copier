@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Ubuntu 22.04 only. Installs the Auto Copier binary, menu entry, and Desktop icon.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_ID="auto_copier"
+LAUNCHER_NAME="auto-copier.desktop"
+INSTALL_BIN="${HOME}/.local/bin/${APP_ID}"
+DATA_DIR="${HOME}/.local/share/${APP_ID}"
+ICON_DIR="${HOME}/.local/share/icons/hicolor"
+MENU_DIR="${HOME}/.local/share/applications"
+SOURCE_BIN="${ROOT}/dist/${APP_ID}"
+
+require_ubuntu_22() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    echo "root အနေနဲ့ မတပ်ဆင်ပါနှင့်။ ပုံမှန် user အကောင့်နဲ့ run ပါ။" >&2
+    exit 1
+  fi
+  if [[ ! -r /etc/os-release ]]; then
+    echo "Ubuntu 22.04 မှာသာ တပ်ဆင်လို့ရသည်။" >&2
+    exit 1
+  fi
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "22.04" ]]; then
+    echo "Ubuntu 22.04 အတွက်သာ ဖြစ်သည်။ လက်ရှိစနစ်: ${PRETTY_NAME:-unknown}" >&2
+    exit 1
+  fi
+}
+
+desktop_dir() {
+  local dir
+  if command -v xdg-user-dir >/dev/null 2>&1; then
+    dir="$(xdg-user-dir DESKTOP)"
+  else
+    dir="${HOME}/Desktop"
+  fi
+  if [[ -z "${dir}" || "${dir}" == "${HOME}" ]]; then
+    dir="${HOME}/Desktop"
+  fi
+  printf '%s\n' "${dir}"
+}
+
+write_launcher() {
+  local path="$1"
+  local icon="$2"
+  cat > "${path}" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Auto Copier
+GenericName=Password Zip Copier
+Comment=Zip a folder with a reverse-name password and copy it
+Exec=${INSTALL_BIN}
+Icon=${icon}
+Terminal=false
+Categories=Utility;Archiving;
+StartupNotify=true
+StartupWMClass=autocopier
+EOF
+}
+
+trust_desktop_icon() {
+  local path="$1"
+  chmod 755 "${path}"
+  if ! command -v gio >/dev/null 2>&1; then
+    echo "gio မရှိသဖြင့် Desktop icon ကို trusted မဖြစ်နိုင်ပါ။" >&2
+    return 0
+  fi
+  # Ubuntu 22.04 Desktop Icons NG launches a .desktop file only when it is
+  # executable and metadata::trusted is the string "true".
+  gio set -t string "${path}" metadata::trusted true
+}
+
+require_ubuntu_22
+
+if [[ ! -f "${SOURCE_BIN}" ]]; then
+  echo "Binary မရှိပါ: ${SOURCE_BIN}" >&2
+  echo "အရင် ./build_binary.sh ကို run ပါ။" >&2
+  exit 1
+fi
+if [[ ! -f "${ROOT}/assets/icon.png" ]]; then
+  echo "App icon မရှိပါ: ${ROOT}/assets/icon.png" >&2
+  exit 1
+fi
+
+mkdir -p "${HOME}/.local/bin" "${DATA_DIR}" "${MENU_DIR}"
+install -m 755 "${SOURCE_BIN}" "${INSTALL_BIN}"
+install -m 644 "${ROOT}/assets/icon.png" "${DATA_DIR}/icon.png"
+
+mkdir -p \
+  "${ICON_DIR}/48x48/apps" \
+  "${ICON_DIR}/128x128/apps" \
+  "${ICON_DIR}/256x256/apps" \
+  "${ICON_DIR}/512x512/apps"
+install -m 644 "${ROOT}/assets/icon-48.png" "${ICON_DIR}/48x48/apps/${APP_ID}.png"
+install -m 644 "${ROOT}/assets/icon-128.png" "${ICON_DIR}/128x128/apps/${APP_ID}.png"
+install -m 644 "${ROOT}/assets/icon-256.png" "${ICON_DIR}/256x256/apps/${APP_ID}.png"
+install -m 644 "${ROOT}/assets/icon.png" "${ICON_DIR}/512x512/apps/${APP_ID}.png"
+
+write_launcher "${MENU_DIR}/${LAUNCHER_NAME}" "${APP_ID}"
+chmod 644 "${MENU_DIR}/${LAUNCHER_NAME}"
+
+DESKTOP_DIR="$(desktop_dir)"
+mkdir -p "${DESKTOP_DIR}"
+DESKTOP_ICON="${DESKTOP_DIR}/${LAUNCHER_NAME}"
+write_launcher "${DESKTOP_ICON}" "${DATA_DIR}/icon.png"
+trust_desktop_icon "${DESKTOP_ICON}"
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "${MENU_DIR}" || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t "${ICON_DIR}" || true
+fi
+
+if ! command -v zip >/dev/null 2>&1; then
+  echo "မှတ်ချက်: zip မရှိသေးပါ။ App သုံးရန် 'sudo apt install zip' လုပ်ပါ။" >&2
+fi
+
+echo "တပ်ဆင်ပြီးပါပြီ။"
+echo "Binary: ${INSTALL_BIN}"
+echo "Desktop icon: ${DESKTOP_ICON}"
+echo "App menu: Auto Copier"
