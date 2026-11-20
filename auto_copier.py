@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pathlib import Path
 import re
 import shutil
@@ -409,11 +410,65 @@ class AutoPasswordZipCopierApp:
         skipped.append(f"{base}/{rel.replace(os.sep, '/')}")
     return skipped
 
+  def _root_gitignore_matches(self, src, paths):
+    ignore_file = os.path.join(src, ".gitignore")
+    if not os.path.isfile(ignore_file) or not paths:
+      return set()
+    git = shutil.which("git")
+    if git is None:
+      raise RuntimeError(
+          "Source တွင် .gitignore ပါသော်လည်း git command မရှိပါ။ "
+          "'sudo apt install git' ဖြင့် ထည့်သွင်းပါ။"
+      )
+
+    git_env = os.environ.copy()
+    for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"):
+      git_env.pop(key, None)
+    git_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    git_env["GIT_CONFIG_GLOBAL"] = os.devnull
+
+    with tempfile.TemporaryDirectory(prefix="auto_copier_gitignore_") as temp_dir:
+      subprocess.run(
+          [git, "-C", temp_dir, "init", "--quiet"],
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+          check=True,
+          env=git_env,
+      )
+      shutil.copyfile(ignore_file, os.path.join(temp_dir, ".gitignore"))
+      input_paths = b"".join(os.fsencode(path) + b"\0" for path in paths)
+      proc = subprocess.run(
+          [
+              git,
+              "-C",
+              temp_dir,
+              "-c",
+              "core.excludesFile=/dev/null",
+              "check-ignore",
+              "--no-index",
+              "-z",
+              "--stdin",
+          ],
+          input=input_paths,
+          stdout=subprocess.PIPE,
+          stderr=subprocess.PIPE,
+          check=False,
+          env=git_env,
+      )
+      if proc.returncode not in (0, 1):
+        detail = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(detail or "git check-ignore failed")
+      return {
+          raw.decode("utf-8", "surrogateescape").rstrip("/")
+          for raw in proc.stdout.split(b"\0")
+          if raw
+      }
+
   def _git_paths_to_zip(self, src):
     files = []
     commands = (
         ["git", "-C", src, "ls-files", "-z"],
-        ["git", "-C", src, "ls-files", "-z", "--others", "--exclude-standard"],
+        ["git", "-C", src, "ls-files", "-z", "--others"],
     )
     for cmd in commands:
       proc = subprocess.run(
@@ -445,7 +500,30 @@ class AutoPasswordZipCopierApp:
         skipped.append(rel)
         continue
       unique.append(rel)
-    return unique, skipped
+    ignored = self._root_gitignore_matches(src, unique)
+    included = []
+    for rel in unique:
+      if rel in ignored:
+        skipped.append(rel)
+      else:
+        included.append(rel)
+    return included, skipped
+
+  def _gitignore_paths_in_tree(self, src):
+    paths = []
+    for dirpath, dirnames, filenames in os.walk(src, followlinks=False):
+      rel_dir = os.path.relpath(dirpath, src)
+      for name in dirnames:
+        rel = name if rel_dir == "." else f"{rel_dir}/{name}"
+        paths.append(rel.replace(os.sep, "/") + "/")
+      for name in filenames:
+        rel = name if rel_dir == "." else f"{rel_dir}/{name}"
+        paths.append(rel.replace(os.sep, "/"))
+    base = os.path.basename(src)
+    return {
+        f"{base}/{rel}"
+        for rel in self._root_gitignore_matches(src, paths)
+    }
 
   def _report_progress(self, percent, job_id):
     shown = max(0, min(100, int(round(percent))))
@@ -672,15 +750,15 @@ class AutoPasswordZipCopierApp:
         "1. Source Folder နှင့် Destination Folder ကို ရွေးပါ။\n"
         "2. Version / String ထည့်ပါ။ ဥပမာ v1.0.0။\n"
         "3. 7z & Copy ကို နှိပ်ပါ။\n"
-        "4. Source သည် git folder ဖြစ်ရင် .gitignore တွင် ပါသော file နှင့် directory များကို မထည့်ပါ။\n"
+        "4. Source folder ထဲရှိ .gitignore တစ်ခုတည်းတွင် ပါသော file နှင့် directory များကို မထည့်ပါ။\n"
         "5. ပျက်နေသော shortcut ကို ချန်ခဲ့ပါသည်။\n"
         "6. ဖိုင်အမည်စာရင်းပါ encrypt လုပ်ထားသော .7z ကို Destination ထဲသို့ ကူးပါသည်။ Password မထည့်ရင် Archive Manager က ဖိုင်စာရင်းကို မပြပါ။\n"
         "7. ပြီးသွားရင် password ကို ပြပါသည်။ Copy နှိပ်၍ ကူးနိုင်ပါသည်။ ၃ စက္ကန့်အကြာ app ပိတ်ပါသည်။\n"
         "\n"
         "Default password သတ်မှတ်ပုံ\n"
         "Default password ကို ရွေးထားရင် password သည် archive ဖိုင်အမည်ကို အက္ခရာပြောင်းပြန်လုပ်ထားခြင်းဖြစ်သည်။\n"
-        "ဖိုင်အမည် = source folder အမည် + _ + version + .7z\n"
-        "ဥပမာ folder အမည် cherry_thin၊ version v1.0.0 ဖြစ်ရင် ဖိုင်အမည်သည် cherry_thin_v1.0.0.7z ဖြစ်ပြီး password သည် z7.0.0.1v_niht_yrrehc ဖြစ်သည်။\n"
+        "ဖိုင်အမည် = source folder အမည် + _ + version + _ + timestamp (YYYYMMDD_HHMMSS) + .7z\n"
+        "ဥပမာ folder အမည် cherry_thin၊ version v1.0.0 ဖြစ်ပြီး timestamp 20261120_151200 ဖြစ်ရင် ဖိုင်အမည်သည် cherry_thin_v1.0.0_20261120_151200.7z ဖြစ်သည်။ Default password သည် ဖိုင်အမည်ကို အက္ခရာပြောင်းပြန်လုပ်ထားခြင်းဖြစ်သည်။\n"
         "Checkbox ကို ဖြုတ်ထားရင် space မပါသော password ကို ကိုယ်တိုင်ထည့်ရပါသည်။ Cancel နှိပ်ရင် အလုပ်မစပါ။"
     )
 
@@ -767,7 +845,8 @@ class AutoPasswordZipCopierApp:
       os.makedirs(dst, exist_ok=True)
 
       folder_name = os.path.basename(src)
-      archive_name = f"{folder_name}_{version}.7z"
+      timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+      archive_name = f"{folder_name}_{version}_{timestamp}.7z"
       archive_path = os.path.join(dst, archive_name)
 
       # Checked default uses the reversed archive name. An unchecked box
@@ -789,6 +868,7 @@ class AutoPasswordZipCopierApp:
           )
       else:
         skipped = self._broken_archive_paths(src)
+        skipped.extend(self._gitignore_paths_in_tree(src))
 
       entries = self._zip_entries(src, include_paths)
       source_total = sum(entries.values())
