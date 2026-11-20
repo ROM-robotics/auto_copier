@@ -12,9 +12,21 @@ python3 auto_copier.py
 
 `7z` မရှိရင် `sudo apt install p7zip-full` လုပ်ပါ။ `.gitignore` စည်းမျဉ်းများကို ဖတ်ရန် `git` လည်းလိုအပ်သည်။ Source folder ထဲမှာ `.gitignore` ရှိရင် အဲဒီဖိုင်ရဲ့ rule တွေနဲ့ကိုက်ညီတဲ့ file နဲ့ directory များကို archive ထဲမထည့်ပါ။ Source folder အပေါ်ဘက် directory များရှိ `.gitignore` ကို မဖတ်ပါ။
 
-## Binary
+## Debian package
 
-Ubuntu 22.04 မှာသာ install / remove လုပ်ပါ။
+`v1.2.3` ပုံစံ tag push လုပ်တိုင်း GitHub Actions က Ubuntu 22.04 amd64 ပေါ်မှာ build လုပ်ပြီး GitHub Release ထဲကို `auto-copier_1.2.3_amd64.deb` တင်ပေးသည်။ Release မှ `.deb` ကို download လုပ်ပြီး double-click လုပ်ကာ Software Install ဖြင့် တင်နိုင်သည်။ `p7zip-full` (သို့မဟုတ် `7zip`) dependency ကို package manager က install လုပ်ပေးသည်။
+
+Local မှာ package ကို စမ်း build လုပ်ရန် Ubuntu 22.04 amd64 နှင့် `dpkg-deb`, `python3-venv`, `python3-tk` လိုအပ်သည်။ Local build ကို စမ်းသပ်ရန်သာ သုံးပြီး Release အတွက် GitHub workflow က သန့်ရှင်းသော Ubuntu 22.04 runner ပေါ်တွင် build လုပ်သည်။ ဒါကြောင့် local machine ရဲ့ OS သို့မဟုတ် Python ကွာခြားမှုကြောင့် ထွက်လာသော binary ကို Release asset အဖြစ် မသုံးပါနှင့်။
+
+```bash
+./build_deb.sh v1.2.3
+```
+
+ထွက်လာသော package သည် `dist/auto-copier_1.2.3_amd64.deb` ဖြစ်သည်။
+
+## Local install scripts
+
+အောက်ပါ script များသည် Ubuntu 22.04 တွင်သာ အသုံးပြုရန်ဖြစ်သည်။
 
 ```bash
 ./build_binary.sh

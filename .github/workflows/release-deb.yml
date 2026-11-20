@@ -1,0 +1,39 @@
+name: Build Debian package
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-venv python3-tk p7zip-full
+
+      - name: Run tests
+        run: python3 -m unittest -v test_auto_copier
+
+      - name: Build .deb
+        run: ./build_deb.sh "$GITHUB_REF_NAME"
+
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/auto-copier_*.deb --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/auto-copier_*.deb \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
