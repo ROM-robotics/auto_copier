@@ -121,6 +121,13 @@ class GitignoreSelectionTests(unittest.TestCase):
     self.assertRegex(archive.name, r"^plain_v1_\d{8}_\d{6}\.7z$")
     extracted = self.root / "extracted"
     password = archive.name[::-1]
+    listing = subprocess.run(
+        ["7z", "l", "-slt", "-y", f"-p{password}", str(archive)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=True,
+    )
+    self.assertIn(b"Method = Copy", listing.stdout)
     subprocess.run(
           ["7z", "x", "-y", f"-p{password}", f"-o{extracted}", str(archive)],
           stdout=subprocess.PIPE,

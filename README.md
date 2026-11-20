@@ -3,6 +3,7 @@
 Desktop folder ကို header-encrypted 7z လုပ်ပြီး destination သို့ ကူးတဲ့ Ubuntu app။ Default password ကို ရွေးထားရင် ဖိုင်အမည်ပြောင်းပြန်ဖြစ်ပြီး၊ ဖြုတ်ထားရင် space မပါသော password ကို တောင်းသည်။ Archive Manager က password မထည့်ရင် ဖိုင်စာရင်းကို မပြပါ။
 
 Archive ဖိုင်အမည်ပုံစံမှာ `source-name_version_YYYYMMDD_HHMMSS.7z` ဖြစ်သည်။
+ဖိုင် compression မလုပ်ဘဲ encryption သာလုပ်သဖြင့် archive ဖန်တီးမှု ပိုမြန်သော်လည်း `.7z` အရွယ်အစားသည် source folder အရွယ်အစားနီးပါး ဖြစ်နိုင်သည်။
 
 ## Run from source
 

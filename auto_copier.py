@@ -752,8 +752,9 @@ class AutoPasswordZipCopierApp:
         "3. 7z & Copy ကို နှိပ်ပါ။\n"
         "4. Source folder ထဲရှိ .gitignore တစ်ခုတည်းတွင် ပါသော file နှင့် directory များကို မထည့်ပါ။\n"
         "5. ပျက်နေသော shortcut ကို ချန်ခဲ့ပါသည်။\n"
-        "6. ဖိုင်အမည်စာရင်းပါ encrypt လုပ်ထားသော .7z ကို Destination ထဲသို့ ကူးပါသည်။ Password မထည့်ရင် Archive Manager က ဖိုင်စာရင်းကို မပြပါ။\n"
-        "7. ပြီးသွားရင် password ကို ပြပါသည်။ Copy နှိပ်၍ ကူးနိုင်ပါသည်။ ၃ စက္ကန့်အကြာ app ပိတ်ပါသည်။\n"
+        "6. မြန်ဆန်စေရန် ဖိုင် compression မလုပ်ပါ။ ထို့ကြောင့် .7z အရွယ်အစားသည် source folder အရွယ်အစားနီးပါး ဖြစ်နိုင်သည်။\n"
+        "7. ဖိုင်အမည်စာရင်းပါ encrypt လုပ်ထားသော .7z ကို Destination ထဲသို့ ကူးပါသည်။ Password မထည့်ရင် Archive Manager က ဖိုင်စာရင်းကို မပြပါ။\n"
+        "8. ပြီးသွားရင် password ကို ပြပါသည်။ Copy နှိပ်၍ ကူးနိုင်ပါသည်။ ၃ စက္ကန့်အကြာ app ပိတ်ပါသည်။\n"
         "\n"
         "Default password သတ်မှတ်ပုံ\n"
         "Default password ကို ရွေးထားရင် password သည် archive ဖိုင်အမည်ကို အက္ခရာပြောင်းပြန်လုပ်ထားခြင်းဖြစ်သည်။\n"
@@ -879,7 +880,7 @@ class AutoPasswordZipCopierApp:
         if "\n" in password or "\r" in password or "\x00" in password:
           raise RuntimeError("Password တွင် space မပါရပါ။")
         cmd = [
-            "7z", "a", "-t7z", "-y", "-mhe=on", "-snl", "-ssc",
+            "7z", "a", "-t7z", "-mx=0", "-y", "-mhe=on", "-snl", "-ssc",
             "-bsp1", "-bso0", "-bse2", "-p", temp_archive,
         ]
         if include_paths is None:
