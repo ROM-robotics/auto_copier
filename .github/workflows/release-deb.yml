@@ -30,10 +30,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/auto-copier_*.deb --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" dist/auto-copier_*.deb \
-              --title "$GITHUB_REF_NAME" \
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          repo="$GITHUB_REPOSITORY"
+          asset="$(find dist -maxdepth 1 -type f -name 'auto-copier_*.deb' -print -quit)"
+          if [[ -z "$asset" ]]; then
+            echo "No .deb package found in dist/" >&2
+            exit 1
+          fi
+
+          if ! gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$repo" --verify-tag --draft \
+              --title "$tag" \
               --generate-notes
           fi
+
+          gh release upload "$tag" "$asset" --repo "$repo" --clobber
+          gh release edit "$tag" --repo "$repo" --draft=false
+
+          asset_name="${asset##*/}"
+          is_draft="$(gh release view "$tag" --repo "$repo" --json isDraft --jq '.isDraft')"
+          assets="$(gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name')"
+          if [[ "$is_draft" != "false" ]] || ! grep -Fxq "$asset_name" <<< "$assets"; then
+            echo "Release asset verification failed: $asset_name" >&2
+            printf 'Release draft status: %s\nAssets:\n%s\n' "$is_draft" "$assets" >&2
+            exit 1
+          fi
+          echo "Published release asset: $asset_name"
